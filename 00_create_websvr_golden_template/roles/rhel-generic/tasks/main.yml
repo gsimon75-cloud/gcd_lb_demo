@@ -1,0 +1,27 @@
+-
+    name: Update all packages
+    become: yes
+    yum:
+        state: latest
+        name: '*'
+-
+    name: Install starter-kit packages
+    become: yes
+    yum:
+        name:
+            - nc
+            - openssl
+            - screen
+            - strace
+            - tcpdump
+            - iftop
+            - bmon
+            - nethogs
+            - yum-utils
+            - curl
+            - git
+            - net-tools
+            - bind-utils
+            - iptables-services
+
+# vim: set sw=4 ts=4 et:

@@ -1,0 +1,17 @@
+[Unit]
+Description=VueJS Server
+After=syslog.target network.target
+
+[Service]
+Type=forking
+Restart=on-failure
+User={{ ansible_user }}
+Group={{ ansible_user }}
+ExecStart=/home/{{ ansible_user }}/{{ project_name }}/server.sh start
+ExecReload=/home/{{ ansible_user }}/{{ project_name }}/server.sh restart
+ExecStop=/home/{{ ansible_user }}/{{ project_name }}/server.sh stop
+
+[Install]
+WantedBy=multi-user.target
+
+# vim: set sw=4 ts=4 et:

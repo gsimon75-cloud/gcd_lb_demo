@@ -1,0 +1,64 @@
+-
+    name: Create ssh config folder (root)
+    become: yes
+    file:
+        path: .ssh
+        state: directory
+        mode: '0700'
+-
+    name: Disable strict ssh host key checking (root)
+    become: yes
+    lineinfile:
+        path: .ssh/config
+        regexp: '^\s*StrictHostKeyChecking\b'
+        line: "StrictHostKeyChecking no"
+        create: yes
+        mode: '0644'
+-
+    name: Disable collecting of ssh host keys (root)
+    become: yes
+    lineinfile:
+        path: .ssh/config
+        regexp: '^\s*UserKnownHostsFile\b'
+        line: "UserKnownHostsFile /dev/null"
+        create: yes
+        mode: '0644'
+-
+    name: Get rid of dumb aliases in bashrc (root)
+    become: yes
+    replace:
+        path: .bashrc
+        regexp: '(?=^\s*alias)'
+        replace: "#"
+
+-
+    name: Create ssh config folder
+    file:
+        path: .ssh
+        state: directory
+        mode: '0700'
+-
+    name: Disable strict ssh host key checking
+    lineinfile:
+        path: .ssh/config
+        regexp: '^\s*StrictHostKeyChecking\b'
+        line: "StrictHostKeyChecking no"
+        create: yes
+        mode: '0644'
+-
+    name: Disable collecting of ssh host keys
+    lineinfile:
+        path: .ssh/config
+        regexp: '^\s*UserKnownHostsFile\b'
+        line: "UserKnownHostsFile /dev/null"
+        create: yes
+        mode: '0644'
+-
+    name: Get rid of dumb aliases in bashrc
+    replace:
+        path: .bashrc
+        regexp: '(?=^\s*alias)'
+        replace: "#"
+
+# vim: set sw=4 ts=4 et:
+    
