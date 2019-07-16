@@ -25,7 +25,10 @@ variable "extra_creds" {
 locals {
   provisioner_user     = "prov"
   provisioner_pub_key  = "${file("../provisioner.openssh.pub")}"
+  provisioner_priv_key = "${file("../provisioner.pem")}"
   ssh_creds   = "${local.provisioner_user}:${local.provisioner_pub_key}\n${var.extra_creds}"
+
+  machine_type         = "g1-small"
 }
 
 provider "google" {
@@ -37,9 +40,20 @@ provider "google" {
 
 ##############################################################################
 
-resource "google_compute_instance" "webserver-template" {
-  name                      = "${var.project}-webserver-template"
-  machine_type              = "g1-small"
+resource "google_compute_disk" "webserver-golden-disk" {
+  name        = "webserver-golden-disk"
+  type        = "pd-standard"
+  zone        = "${var.zone}"
+  size        = 10
+  image       = "centos-7"
+}
+
+
+##############################################################################
+
+resource "google_compute_instance" "webserver-golden-instance" {
+  name                      = "${var.project}-webserver-golden-instance"
+  machine_type              = "${local.machine_type}"
   zone                      = "${var.zone}"
   allow_stopping_for_update = true
 
@@ -53,12 +67,7 @@ resource "google_compute_instance" "webserver-template" {
 
   boot_disk {
     #auto_delete = false
-
-    initialize_params {
-      size  = 10
-      type  = "pd-standard"
-      image = "centos-7"
-    }
+    source      = "${google_compute_disk.webserver-golden-disk.self_link}"
   }
 
   network_interface {
@@ -67,44 +76,106 @@ resource "google_compute_instance" "webserver-template" {
     }
   }
 
-  #provisioner "local-exec" {
-  #  inline = [
-  #    # substitute the public ip into the ansible inventory file 'hosts'
-  #    "sed -r '/^webserver-template\>/ s/(ansible_host=)\S*/\1${google_compute_instance.webserver-template.network_interface.0.access_config.0.nat_ip}/' hosts"
-  #  ]
-  #}
+  connection {
+    type        = "ssh"
+    host        = "${self.network_interface.0.access_config.0.nat_ip}"
+    user        = "${local.provisioner_user}"
+    private_key = "${local.provisioner_priv_key}"
+    timeout     = "2m"
+    agent       = false
+  }
+
+  provisioner "remote-exec" {
+    inline = [ 
+      "echo '==== Instance is available via SSH'",
+    ]
+  }
+
+  provisioner "local-exec" {
+    command = "ansible-playbook -i inventory.gcp_compute.yaml websrv_golden.install.yaml -v"
+  }
 
 }
 
 ##############################################################################
 
-# NOTE: If the instance is restarted, its ephemeral external IP gets renewed,
-# but a plain 'terraform show' will display only the contents of `terrform.tfstate`,
-# and it may be misleading.
-# 'terraform apply' refreshes the computed/generated values, so either use that,
-# or display the up-to-date values from the data source instead.
-# On the other hand, until the instance is created, the data source returns
-# null, and that can't be indexed with '.0.', so that's an error, which
-# should be handled, perhaps via a long and ugly ternary expression.
-
-#data "google_compute_instance" "webserver-template" {
-#  name = "${var.project}-webserver-template"
+#resource "google_compute_snapshot" "webserver-golden-disk-snapshot" {
+#  name = "${var.project}-webserver"
+#  depends_on  = [
+#    google_compute_instance.webserver-golden-instance
+#  ]
+#  source_disk = "${google_compute_disk.webserver-golden-disk.name}"
 #  zone = "${var.zone}"
 #}
-#
-#output "REAL-webserver-template-public-ip" {
-#  value = "${data.google_compute_instance.webserver-template.network_interface.0.access_config.0.nat_ip}"
-#}
 
 
 ##############################################################################
 
-output "webserver-template-public-ip" {
-  value = "${google_compute_instance.webserver-template.network_interface.0.access_config.0.nat_ip}"
+resource "google_compute_image" "webserver-golden-image" {
+  name        = "webserver-golden-image"
+  depends_on  = [
+    google_compute_instance.webserver-golden-instance
+  ]
+  source_disk = "${google_compute_disk.webserver-golden-disk.self_link}"
+  #source_disk = "${google_compute_snapshot.webserver-golden-disk-snapshot.self_link}"
 }
 
-output "webserver-template-private-ip" {
-  value = "${google_compute_instance.webserver-template.network_interface.0.network_ip}"
+
+##############################################################################
+
+resource "google_compute_instance_template" "webserver-template" {
+  # NOTE: just using 'source_instance' is not yet supported by Terraform,
+  # so we'll clone every setting one by one
+  name        = "${var.project}-webserver"
+  description = "This template is used to create frontend web server instances."
+  machine_type         = "${local.machine_type}"
+  can_ip_forward       = false
+
+  scheduling {
+    automatic_restart   = true
+    on_host_maintenance = "MIGRATE"
+  }
+
+  disk {
+    source_image  = "${google_compute_image.webserver-golden-image.self_link}"
+    boot          = true
+  }
+
+  network_interface {
+    network = "default"
+    access_config {
+    }
+  }
+
+  metadata = {
+    sshKeys = "${local.ssh_creds}"
+  }
+
+  labels = {
+    project = "${var.project}"
+  }
+
+}
+
+
+##############################################################################
+
+#resource "null_resource" "webserver-template" {
+#  depends_on  = [
+#    google_compute_instance.webserver-golden-instance
+#  ]
+#
+#  provisioner "local-exec" {
+#    command = "echo '==== Here will be the template created'"
+#  }
+#}
+
+output "webserver-golden-instance-public-ip" {
+  value = "${google_compute_instance.webserver-golden-instance.network_interface.0.access_config.0.nat_ip}"
+}
+
+output "webserver-golden-instance-private-ip" {
+  value = "${google_compute_instance.webserver-golden-instance.network_interface.0.network_ip}"
 }
 
 # vim: set sw=2 ts=2 et:

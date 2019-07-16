@@ -1,5 +1,5 @@
 -
-    hosts: [ lb-demo-webserver-template ]
+    hosts: [ lb-demo-webserver-golden-instance ]
     roles:
         - linux
         - rhel-generic
@@ -61,5 +61,20 @@
         name: Enable the Frontend as a service
         become: yes
         command: "/usr/bin/systemctl enable {{ project_name }}"
+    -
+        name: Shut down the instance
+        become: yes
+        shell: "sleep 2 && /sbin/shutdown -c && /sbin/shutdown -h now"
+        async: 1
+        poll: 0
+    -
+        name: Save target host IP
+        set_fact:
+            target_host: "{{ ansible_host }}"
+    -
+        name: Wait to go down
+        wait_for: "port=22 host={{ target_host }} delay=10 state=stopped timeout=60"
+        delegate_to: 127.0.0.1
+
 
 # vim: set sw=4 ts=4 et:
