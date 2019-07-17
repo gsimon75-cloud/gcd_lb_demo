@@ -1,0 +1,44 @@
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+    tasks:
+#        -
+#            name: Destroy a forwarding rule
+#            gcp_compute_forwarding_rule:
+#                project: "{{ gcp_project_id }}"
+#                auth_kind: serviceaccount
+#                service_account_file: "{{ gcp_cred_file }}"
+#                name: demo_fw_rule
+#                region: "{{ gcp_region }}"
+#                state: absent
+        -
+            name: Destroy the backend service (frontend)
+            gcp_compute_backend_service:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_service_name }}"
+                health_checks: []
+                state: absent
+        -
+            name: Destroy a http health check
+            gcp_compute_http_health_check:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_health_check_name }}"
+                state: absent
+        -
+            name: Destroy the frontend instance group manager
+            gcp_compute_instance_group_manager:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_group_name }}"
+                zone: "{{ gcp_zone }}"
+                base_instance_name: ""
+                instance_template:
+                state: absent
+
+# vim: set sw=4 ts=4 et indk= :

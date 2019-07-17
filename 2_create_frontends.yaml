@@ -1,0 +1,94 @@
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+    tags: create
+    tasks:
+        -
+            name: Retrieve facts about the instance template
+            tags: test
+            gcp_compute_instance_template_facts:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                filters:
+                    - name = "{{ webserver_instance_template }}"
+            register: instance_templates
+        -
+            name: Create the frontend instance group manager
+            tags: test
+            gcp_compute_instance_group_manager:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_group_name }}"
+                zone: "{{ gcp_zone }}"
+                named_ports:
+                    -
+                        name: "http"
+                        port: 80
+                    -
+                        name: "http-alt"
+                        port: 8080
+                    -
+                        name: "https"
+                        port: 443
+                base_instance_name: "{{ frontend_instance_base_name }}"
+                instance_template: "{{ instance_templates['items'][0] }}"
+                target_size: "{{ frontend_instances_num }}"
+            register: instance_group_manager
+        -
+            name: This is the group manager
+            tags: test
+            debug:
+                var: instance_group_manager
+        -
+            name: Create a http health check
+            gcp_compute_http_health_check:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_health_check_name }}"
+                port: 8080
+                request_path: '/'
+                check_interval_sec: 5
+                timeout_sec: 4
+                healthy_threshold: 3
+                unhealthy_threshold: 3
+            register: health_check
+        -
+            name: Create the backend service (frontend)
+            gcp_compute_backend_service:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ frontend_service_name }}"
+                load_balancing_scheme: EXTERNAL
+                protocol: HTTP
+                port_name: "http-alt"
+                timeout_sec: 30
+                connection_draining:
+                    draining_timeout_sec: 300
+                backends:
+                    -
+                        balancing_mode: UTILIZATION
+                        max_utilization: "0.8"
+                        capacity_scaler: "1.0"
+                        group:
+                            selfLink: "{{ instance_group_manager.instanceGroup }}"
+                health_checks:
+                    - "{{ health_check.selfLink }}"
+#        -
+#            name: Create a forwarding rule
+#            gcp_compute_forwarding_rule:
+#                project: "{{ gcp_project_id }}"
+#                auth_kind: serviceaccount
+#                service_account_file: "{{ gcp_cred_file }}"
+#                name: demo_fw_rule
+#                region: "{{ gcp_region }}"
+#                target: "{{ targetpool }}"
+#                ip_protocol: TCP
+#                port_range: 8080-8080
+
+
+# vim: set sw=4 ts=4 et indk= :
