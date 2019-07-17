@@ -1,0 +1,219 @@
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+        - webserver_vars.yaml
+    vars:
+        ssh_creds: "{{ ansible_user }}:{{ lookup('file', ansible_ssh_public_key_file) }}"
+    tags: create
+    tasks:
+        -
+            name: Create the boot disk
+            gcp_compute_disk:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_bootdisk_name }}"
+                zone: "{{ gcp_zone }}"
+                type: "pd-standard"
+                size_gb: 10
+                source_image: "projects/centos-cloud/global/images/family/centos-7"
+            register: boot_disk
+        -
+            name: This is the boot disk
+            debug:
+                var: boot_disk
+        -
+            name: Create the golden instance
+            gcp_compute_instance:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_instance_name }}"
+                zone: "{{ gcp_zone }}"
+                machine_type: "{{ webserver_machine_type }}"
+                metadata:
+                    sshKeys: "{{ ssh_creds }}"
+                status: RUNNING
+                disks:
+                    -
+                        boot: true
+                        auto_delete: false
+                        source: "{{ boot_disk }}"
+                network_interfaces:
+                    -
+                        access_configs:
+                        -
+                            name: External NAT
+                            type: ONE_TO_ONE_NAT
+                            #nat_ip: ...
+            register: golden_instance
+        -
+            name: This is the golden instance
+            debug:
+                var: golden_instance
+        -
+            meta: refresh_inventory
+-
+    hosts: [ webserver-golden-instance ]
+    roles:
+        - linux
+        - rhel-generic
+    tags: install
+    tasks:
+    -
+        name: Download NodeSource repo registrator
+        become: yes
+        get_url:
+            url: "https://rpm.nodesource.com/setup_10.x"
+            dest: "~/NodeSource.reg.sh"
+            mode: '0755'
+    -
+        name: Add NodeSource repository
+        become: yes
+        shell: "~/NodeSource.reg.sh"
+    -
+        name: Install ExpressJS dependencies
+        become: yes
+        yum:
+            name:
+                - "nodejs"
+                - "gcc-c++"
+                - "make"
+    -
+        name: Clone the Web Frontend source
+        shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
+    -
+        name: Update the Web Frontend source
+        command: "/bin/git pull"
+        args:
+            chdir: "{{ project_name }}"
+    -
+        name: Modify the DB server in the frontend config
+        lineinfile:
+            path: "{{ project_name }}/config.json"
+            backrefs: true
+            regexp: '^(\s*"db_server":\s*)"[^"]*"(.*)'
+            line: '\1"lb-demo-dbserver"\2'
+    -
+        name: Installing npm packages
+        command: "/usr/bin/npm install"
+        args:
+            chdir: "{{ project_name }}"
+    -
+        name: Build the Frontend server
+        command: "/usr/bin/npm run builddev"
+        args:
+            chdir: "{{ project_name }}"
+    -
+        name: Generate service descriptor file
+        become: yes
+        template:
+            src: "templates/service_file.j2"
+            dest: "/etc/systemd/system/{{ project_name }}.service"
+            owner: "root"
+            group: "root"
+            mode: '0644'
+    -
+        name: Enable the Frontend as a service
+        become: yes
+        command: "/usr/bin/systemctl enable {{ project_name }}"
+    -
+        name: Shut down the instance
+        become: yes
+        shell: "sleep 2 && /sbin/shutdown -c && /sbin/shutdown -h now"
+        async: 1
+        poll: 0
+    -
+        name: Save target host IP
+        set_fact:
+            target_host: "{{ ansible_host }}"
+    -
+        name: Wait to go down
+        wait_for: "port=22 host={{ target_host }} delay=10 state=stopped timeout=60"
+        delegate_to: 127.0.0.1
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+        - webserver_vars.yaml
+    vars:
+        ssh_creds: "{{ ansible_user }}:{{ lookup('file', ansible_ssh_public_key_file) }}"
+    tasks:
+        -
+            name: These are the ssh_creds
+            debug:
+                var: ssh_creds
+        -
+            name: Retrieve facts about the boot disk
+            tags: template
+            gcp_compute_disk_facts:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                zone: "{{ gcp_zone }}"
+                filters:
+                    - name = "{{ webserver_bootdisk_name }}"
+            register: boot_disk_facts
+        -
+            name: Create golden image from boot disk
+            tags: template
+            gcp_compute_image:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_bootdisk_name }}"
+                source_disk: "{{ boot_disk_facts['items'][0] }}"
+            register: boot_disk_image
+        -
+            name: Create the golden instance template
+            tags: template
+            gcp_compute_instance_template:
+                name: "{{ webserver_instance_template }}"
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                properties:
+                    machine_type: "{{ webserver_machine_type }}"
+                    metadata:
+                        sshKeys: "{{ ssh_creds }}"
+                    disks:
+                        -
+                            boot: true
+                            auto_delete: true
+                            initialize_params:
+                                source_image: "projects/{{ gcp_project_id }}/global/images/{{ boot_disk_image.name }}"
+                                # or: {{ boot_disk_image.selfLink }} =~ s@https://www.googleapis.com/compute/v1/@@
+                    network_interfaces:
+                        -
+                            access_configs:
+                            -
+                                name: External NAT
+                                type: ONE_TO_ONE_NAT
+            register: golden_template
+        -
+            name: This is the golden template
+            debug:
+                var: golden_template
+        -
+            name: Destroy the golden instance
+            tags: destroy
+            gcp_compute_instance:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_instance_name }}"
+                zone: "{{ gcp_zone }}"
+                state: absent
+        -
+            name: Destroy the boot disk
+            tags: destroy
+            gcp_compute_disk:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_bootdisk_name }}"
+                zone: "{{ gcp_zone }}"
+                state: absent
+
+# vim: set sw=4 ts=4 et indk= :

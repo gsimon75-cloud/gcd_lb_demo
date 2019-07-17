@@ -1,0 +1,6 @@
+webserver_machine_type: "g1-small"
+webserver_instance_name: "webserver-golden-instance"
+webserver_bootdisk_name: "webserver-golden-disk"
+webserver_instance_template: "webserver"
+
+# vim: set sw=4 ts=4 et indk= :

@@ -1,0 +1,42 @@
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+        - webserver_vars.yaml
+    tasks:
+        -
+            name: Destroy the golden instance template
+            gcp_compute_instance_template:
+                name: "{{ webserver_instance_template }}"
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                state: absent
+        -
+            name: Destroy the golden image
+            gcp_compute_image:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_bootdisk_name }}"
+                state: absent
+        -
+            name: Destroy the golden instance
+            gcp_compute_instance:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_instance_name }}"
+                zone: "{{ gcp_zone }}"
+                state: absent
+        -
+            name: Destroy the boot disk
+            gcp_compute_disk:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_bootdisk_name }}"
+                zone: "{{ gcp_zone }}"
+                state: absent
+
+# vim: set sw=4 ts=4 et indk= :

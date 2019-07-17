@@ -2,7 +2,7 @@ plugin: gcp_compute
 zones: # populate inventory with instances in these regions
     - europe-west1-c
 projects:
-    - qwer-123123
+    - networksandbox-232012
 service_account_file: ../service_account.json
 auth_kind: serviceaccount
 scopes:
