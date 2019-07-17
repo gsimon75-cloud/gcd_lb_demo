@@ -3,8 +3,6 @@
     vars_files:
         - external_vars.yaml
         - webserver_vars.yaml
-    vars:
-        ssh_creds: "{{ ansible_user }}:{{ lookup('file', ansible_ssh_public_key_file) }}"
     tags: create
     tasks:
         -
@@ -32,8 +30,6 @@
                 name: "{{ webserver_instance_name }}"
                 zone: "{{ gcp_zone }}"
                 machine_type: "{{ webserver_machine_type }}"
-                metadata:
-                    sshKeys: "{{ ssh_creds }}"
                 status: RUNNING
                 disks:
                     -
@@ -137,13 +133,7 @@
     vars_files:
         - external_vars.yaml
         - webserver_vars.yaml
-    vars:
-        ssh_creds: "{{ ansible_user }}:{{ lookup('file', ansible_ssh_public_key_file) }}"
     tasks:
-        -
-            name: These are the ssh_creds
-            debug:
-                var: ssh_creds
         -
             name: Retrieve facts about the boot disk
             tags: template
@@ -175,8 +165,6 @@
                 service_account_file: "{{ gcp_cred_file }}"
                 properties:
                     machine_type: "{{ webserver_machine_type }}"
-                    metadata:
-                        sshKeys: "{{ ssh_creds }}"
                     disks:
                         -
                             boot: true
