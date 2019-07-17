@@ -2,7 +2,6 @@
     hosts: localhost
     vars_files:
         - external_vars.yaml
-        - webserver_vars.yaml
     tasks:
         -
             name: Destroy the golden instance template

@@ -2,7 +2,6 @@
     hosts: localhost
     vars_files:
         - external_vars.yaml
-        - webserver_vars.yaml
     tags: create
     tasks:
         -
@@ -77,10 +76,10 @@
                 - "gcc-c++"
                 - "make"
     -
-        name: Clone the Web Frontend source
+        name: Clone the project source
         shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
     -
-        name: Update the Web Frontend source
+        name: Update the project source
         command: "/bin/git pull"
         args:
             chdir: "{{ project_name }}"
@@ -90,7 +89,8 @@
             path: "{{ project_name }}/config.json"
             backrefs: true
             regexp: '^(\s*"db_server":\s*)"[^"]*"(.*)'
-            line: '\1"lb-demo-dbserver"\2'
+            line: '\1"{{ db_server_instance_name }}"\2'
+            #line: '\1"lb-demo-dbserver"\2'
     -
         name: Installing npm packages
         command: "/usr/bin/npm install"
@@ -132,7 +132,6 @@
     hosts: localhost
     vars_files:
         - external_vars.yaml
-        - webserver_vars.yaml
     tasks:
         -
             name: Retrieve facts about the boot disk
