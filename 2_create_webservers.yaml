@@ -15,13 +15,13 @@
                     - name = "{{ webserver_instance_template }}"
             register: instance_templates
         -
-            name: Create the frontend instance group manager
+            name: Create the webserver instance group manager
             tags: test
             gcp_compute_instance_group_manager:
                 project: "{{ gcp_project_id }}"
                 auth_kind: serviceaccount
                 service_account_file: "{{ gcp_cred_file }}"
-                name: "{{ frontend_group_name }}"
+                name: "{{ webserver_group_name }}"
                 zone: "{{ gcp_zone }}"
                 named_ports:
                     -
@@ -33,9 +33,9 @@
                     -
                         name: "https"
                         port: 443
-                base_instance_name: "{{ frontend_instance_base_name }}"
+                base_instance_name: "{{ webserver_instance_base_name }}"
                 instance_template: "{{ instance_templates['items'][0] }}"
-                target_size: "{{ frontend_instances_num }}"
+                target_size: "{{ webserver_instances_num }}"
             register: instance_group_manager
         -
             name: This is the group manager
@@ -48,7 +48,7 @@
                 project: "{{ gcp_project_id }}"
                 auth_kind: serviceaccount
                 service_account_file: "{{ gcp_cred_file }}"
-                name: "{{ frontend_health_check_name }}"
+                name: "{{ webserver_health_check_name }}"
                 port: 8080
                 request_path: '/'
                 check_interval_sec: 5
@@ -57,18 +57,21 @@
                 unhealthy_threshold: 3
             register: health_check
         -
-            name: Create the backend service (frontend)
+            name: Create the backend service for the webservers
+            # NOTE: This will be a *global* backend service anyway
+            # https://github.com/ansible/ansible/issues/52319
             gcp_compute_backend_service:
                 project: "{{ gcp_project_id }}"
                 auth_kind: serviceaccount
                 service_account_file: "{{ gcp_cred_file }}"
-                name: "{{ frontend_service_name }}"
+                name: "{{ webserver_service_name }}"
                 load_balancing_scheme: EXTERNAL
                 protocol: HTTP
                 port_name: "http-alt"
                 timeout_sec: 30
                 connection_draining:
                     draining_timeout_sec: 300
+                session_affinity: GENERATED_COOKIE
                 backends:
                     -
                         balancing_mode: UTILIZATION
@@ -78,17 +81,41 @@
                             selfLink: "{{ instance_group_manager.instanceGroup }}"
                 health_checks:
                     - "{{ health_check.selfLink }}"
-#        -
-#            name: Create a forwarding rule
-#            gcp_compute_forwarding_rule:
-#                project: "{{ gcp_project_id }}"
-#                auth_kind: serviceaccount
-#                service_account_file: "{{ gcp_cred_file }}"
-#                name: demo_fw_rule
-#                region: "{{ gcp_region }}"
-#                target: "{{ targetpool }}"
-#                ip_protocol: TCP
-#                port_range: 8080-8080
-
+            register: backend_service
+        -
+            name: Create a URL map
+            gcp_compute_url_map:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-url-map"
+                default_service: "{{ backend_service }}"
+            register: url_map
+        -
+            name: Create a target proxy
+            gcp_compute_target_http_proxy:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-tgt-proxy"
+                url_map: "{{ url_map }}"
+            register: target_proxy
+        -
+            name: Create a forwarding rule
+            gcp_compute_global_forwarding_rule:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-fwd-rule"
+                load_balancing_scheme: EXTERNAL
+                ip_protocol: TCP
+                ip_version: IPV4
+                port_range: "8080-8080"
+                target: "{{ target_proxy.selfLink }}"
+            register: fwd_rule
+        -
+            name: This is the forwarding rule
+            debug:
+                var: fwd_rule
 
 # vim: set sw=4 ts=4 et indk= :

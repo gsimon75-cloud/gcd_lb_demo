@@ -1,0 +1,61 @@
+-
+    hosts: localhost
+    vars_files:
+        - external_vars.yaml
+    tasks:
+        -
+            name: Destroy the forwarding rule
+            gcp_compute_global_forwarding_rule:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-fwd-rule"
+                state: absent
+        -
+            name: Destroy the target proxy
+            gcp_compute_target_http_proxy:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-tgt-proxy"
+                url_map:
+                state: absent
+        -
+            name: Destroy the URL map
+            gcp_compute_url_map:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ gcp_project }}-url-map"
+                default_service:
+                state: absent
+        -
+            name: Destroy the backend service
+            gcp_compute_backend_service:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_service_name }}"
+                health_checks: []
+                state: absent
+        -
+            name: Destroy a http health check
+            gcp_compute_http_health_check:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_health_check_name }}"
+                state: absent
+        -
+            name: Destroy the webserver instance group manager
+            gcp_compute_instance_group_manager:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_group_name }}"
+                zone: "{{ gcp_zone }}"
+                base_instance_name: ""
+                instance_template:
+                state: absent
+
+# vim: set sw=4 ts=4 et indk= :

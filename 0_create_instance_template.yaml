@@ -2,8 +2,41 @@
     hosts: localhost
     vars_files:
         - external_vars.yaml
+    vars:
+        service_account_content: "{{ lookup('file', gcp_cred_file) }}"
+        service_account_email: "{{ service_account_content | json_query('client_email') }}"
     tags: create
     tasks:
+        -
+            name: Create firewall rule allow-http
+            tags: fw
+            gce_net:
+                project_id: "{{ gcp_project_id }}"
+                credentials_file: "{{ gcp_cred_file }}"
+                service_account_email: "{{ service_account_email }}"
+                name: default
+                fwname: "allow-http"
+                allowed: "tcp:80"
+        -
+            name: Create firewall rule allow-http-alt
+            tags: fw
+            gce_net:
+                project_id: "{{ gcp_project_id }}"
+                credentials_file: "{{ gcp_cred_file }}"
+                service_account_email: "{{ service_account_email }}"
+                name: default
+                fwname: "allow-http-alt"
+                allowed: "tcp:8080"
+        -
+            name: Create firewall rule allow-https
+            tags: fw
+            gce_net:
+                project_id: "{{ gcp_project_id }}"
+                credentials_file: "{{ gcp_cred_file }}"
+                service_account_email: "{{ service_account_email }}"
+                name: default
+                fwname: "allow-https"
+                allowed: "tcp:443"
         -
             name: Create the boot disk
             gcp_compute_disk:
@@ -42,15 +75,23 @@
                             name: External NAT
                             type: ONE_TO_ONE_NAT
                             #nat_ip: ...
+                tags:
+                    items: [ "allow-http", "allow-http-alt", "allow-https" ]
             register: golden_instance
         -
             name: This is the golden instance
             debug:
                 var: golden_instance
         -
+            name: Wait for SSH
+            wait_for: "port=22 host={{ golden_instance.networkInterfaces[0].accessConfigs[0].natIP }} delay=10 state=started timeout=60"
+            delegate_to: 127.0.0.1
+        -
             meta: refresh_inventory
 -
     hosts: [ webserver-golden-instance ]
+    vars_files:
+        - external_vars.yaml
     roles:
         - linux
         - rhel-generic
@@ -177,6 +218,8 @@
                             -
                                 name: External NAT
                                 type: ONE_TO_ONE_NAT
+                    tags:
+                        items: [ "allow-http", "allow-http-alt", "allow-https" ]
             register: golden_template
         -
             name: This is the golden template

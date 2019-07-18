@@ -14,4 +14,12 @@ webserver_instance_template: "webserver"
 db_server_machine_type: "f1-micro"
 db_server_instance_name: "dbserver"
 
+webserver_group_name: "webservers"
+webserver_instance_base_name: "webserver"
+webserver_instances_num: 2
+
+webserver_health_check_name: "webserver-health"
+
+webserver_service_name: "webserver-service"
+
 # vim: set sw=4 ts=4 et indk= :
