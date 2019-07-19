@@ -23,10 +23,10 @@
                 network_interfaces:
                     -
                         access_configs:
-                        -
-                            name: External NAT
-                            type: ONE_TO_ONE_NAT
-                            #nat_ip: ...
+                            -
+                                name: External NAT
+                                type: ONE_TO_ONE_NAT
+                                #nat_ip: ...
             register: db_instance
         -
             name: This is the DB server instance
@@ -47,73 +47,73 @@
         - rhel-generic
     tags: install
     tasks:
-    -
-        name: Install MariaDB
-        become: yes
-        yum:
-            name:
-                - "mariadb"
-                - "mariadb-server"
-    -
-        name: Start MariaDB
-        become: yes
-        shell: |
-            systemctl enable mariadb
-            systemctl start mariadb
-    -
-        name: Clone the project source
-        shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
-    -
-        name: Update the project source
-        command: "/bin/git pull"
-        args:
-            chdir: "{{ project_name }}"
-    -
-        name: Retrieve facts about the DB server
-        tags: test
-        gcp_compute_instance_facts:
-            project: "{{ gcp_project_id }}"
-            auth_kind: serviceaccount
-            service_account_file: "{{ gcp_cred_file }}"
-            zone: "{{ gcp_zone }}"
-            filters:
-                - name = "{{ db_server_instance_name }}"
-        delegate_to: 127.0.0.1
-        register: db_server_facts
-    -
-        name: This is the DB server interface
-        tags: test
-        debug:
-            var: db_server_facts['items'][0].networkInterfaces[0]
-    -
-        name: Retrieve facts about the subnet
-        tags: test
-        gcp_compute_subnetwork_facts:
-            project: "{{ gcp_project_id }}"
-            auth_kind: serviceaccount
-            service_account_file: "{{ gcp_cred_file }}"
-            region: "{{ gcp_region }}"
-            filters:
-                - selfLink = "{{ db_server_facts['items'][0].networkInterfaces[0].subnetwork }}"
-        delegate_to: 127.0.0.1
-        register: db_subnet_facts
-    -
-        name: Modify the subnet in DB creation script
-        tags: test
-        vars:
-            cidr: "{{ db_subnet_facts['items'][0].ipCidrRange }}"
-            local_subnet: "{{ cidr | ipaddr('network') }}/{{ cidr | ipaddr('netmask') }}"
-        replace:
-            path: "{{ project_name }}/sql/00_create.sql"
-            regexp: "(?<=@')[1-9][^']*"
-            replace: "{{ local_subnet }}"
-    -
-        name: Create the database structure
-        become: yes
-        shell: |
-            mysql < 00_create.sql
-            mysql < 01_add_data.sql
-        args:
-            chdir: "{{ project_name }}/sql"
+        -
+            name: Install MariaDB
+            become: yes
+            yum:
+                name:
+                    - "mariadb"
+                    - "mariadb-server"
+        -
+            name: Start MariaDB
+            become: yes
+            shell: |
+                systemctl enable mariadb
+                systemctl start mariadb
+        -
+            name: Clone the project source
+            shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
+        -
+            name: Update the project source
+            command: "/bin/git pull"
+            args:
+                chdir: "{{ project_name }}"
+        -
+            name: Retrieve facts about the DB server
+            tags: test
+            gcp_compute_instance_facts:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                zone: "{{ gcp_zone }}"
+                filters:
+                    - name = "{{ db_server_instance_name }}"
+            delegate_to: 127.0.0.1
+            register: db_server_facts
+        -
+            name: This is the DB server interface
+            tags: test
+            debug:
+                var: db_server_facts['items'][0].networkInterfaces[0]
+        -
+            name: Retrieve facts about the subnet
+            tags: test
+            gcp_compute_subnetwork_facts:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                region: "{{ gcp_region }}"
+                filters:
+                    - selfLink = "{{ db_server_facts['items'][0].networkInterfaces[0].subnetwork }}"
+            delegate_to: 127.0.0.1
+            register: db_subnet_facts
+        -
+            name: Modify the subnet in DB creation script
+            tags: test
+            vars:
+                cidr: "{{ db_subnet_facts['items'][0].ipCidrRange }}"
+                local_subnet: "{{ cidr | ipaddr('network') }}/{{ cidr | ipaddr('netmask') }}"
+            replace:
+                path: "{{ project_name }}/sql/00_create.sql"
+                regexp: "(?<=@')[1-9][^']*"
+                replace: "{{ local_subnet }}"
+        -
+            name: Create the database structure
+            become: yes
+            shell: |
+                mysql < 00_create.sql
+                mysql < 01_add_data.sql
+            args:
+                chdir: "{{ project_name }}/sql"
 
 # vim: set sw=4 ts=4 et indk= :

@@ -97,78 +97,78 @@
         - rhel-generic
     tags: install
     tasks:
-    -
-        name: Download NodeSource repo registrator
-        become: yes
-        get_url:
-            url: "https://rpm.nodesource.com/setup_10.x"
-            dest: "~/NodeSource.reg.sh"
-            mode: '0755'
-    -
-        name: Add NodeSource repository
-        become: yes
-        shell: "~/NodeSource.reg.sh"
-    -
-        name: Install ExpressJS dependencies
-        become: yes
-        yum:
-            name:
-                - "nodejs"
-                - "gcc-c++"
-                - "make"
-    -
-        name: Clone the project source
-        shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
-    -
-        name: Update the project source
-        command: "/bin/git pull"
-        args:
-            chdir: "{{ project_name }}"
-    -
-        name: Modify the DB server in the frontend config
-        replace:
-            path: "{{ project_name }}/config.json"
-            regexp: '(?<="db_server":)\s*".*?"'
-            replace: ' "{{ db_server_instance_name }}"'
-    -
-        name: Installing npm packages
-        command: "/usr/bin/npm install"
-        args:
-            chdir: "{{ project_name }}"
-    -
-        name: Build the Frontend server
-        command: "/usr/bin/npm run builddev"
-        args:
-            chdir: "{{ project_name }}"
-    -
-        name: Generate service descriptor file
-        become: yes
-        template:
-            src: "templates/service_file.j2"
-            dest: "/etc/systemd/system/{{ project_name }}.service"
-            owner: "root"
-            group: "root"
-            mode: '0644'
-    -
-        name: Enable the Frontend as a service
-        become: yes
-        command: "/usr/bin/systemctl enable {{ project_name }}"
-    -
-        name: Shut down the instance
-        become: yes
-        shell: "sleep 2 && /sbin/shutdown -c && /sbin/shutdown -h now"
-        async: 1
-        poll: 0
-    -
-        name: Wait to go down
-        gcp_compute_instance:
-            project: "{{ gcp_project_id }}"
-            auth_kind: serviceaccount
-            service_account_file: "{{ gcp_cred_file }}"
-            name: "{{ webserver_instance_name }}"
-            zone: "{{ gcp_zone }}"
-            status: TERMINATED
-        delegate_to: 127.0.0.1
+        -
+            name: Download NodeSource repo registrator
+            become: yes
+            get_url:
+                url: "https://rpm.nodesource.com/setup_10.x"
+                dest: "~/NodeSource.reg.sh"
+                mode: '0755'
+        -
+            name: Add NodeSource repository
+            become: yes
+            shell: "~/NodeSource.reg.sh"
+        -
+            name: Install ExpressJS dependencies
+            become: yes
+            yum:
+                name:
+                    - "nodejs"
+                    - "gcc-c++"
+                    - "make"
+        -
+            name: Clone the project source
+            shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
+        -
+            name: Update the project source
+            command: "/bin/git pull"
+            args:
+                chdir: "{{ project_name }}"
+        -
+            name: Modify the DB server in the frontend config
+            replace:
+                path: "{{ project_name }}/config.json"
+                regexp: '(?<="db_server":)\s*".*?"'
+                replace: ' "{{ db_server_instance_name }}"'
+        -
+            name: Installing npm packages
+            command: "/usr/bin/npm install"
+            args:
+                chdir: "{{ project_name }}"
+        -
+            name: Build the Frontend server
+            command: "/usr/bin/npm run builddev"
+            args:
+                chdir: "{{ project_name }}"
+        -
+            name: Generate service descriptor file
+            become: yes
+            template:
+                src: "templates/service_file.j2"
+                dest: "/etc/systemd/system/{{ project_name }}.service"
+                owner: "root"
+                group: "root"
+                mode: '0644'
+        -
+            name: Enable the Frontend as a service
+            become: yes
+            command: "/usr/bin/systemctl enable {{ project_name }}"
+        -
+            name: Shut down the instance
+            become: yes
+            shell: "sleep 2 && /sbin/shutdown -c && /sbin/shutdown -h now"
+            async: 1
+            poll: 0
+        -
+            name: Wait to go down
+            gcp_compute_instance:
+                project: "{{ gcp_project_id }}"
+                auth_kind: serviceaccount
+                service_account_file: "{{ gcp_cred_file }}"
+                name: "{{ webserver_instance_name }}"
+                zone: "{{ gcp_zone }}"
+                status: TERMINATED
+            delegate_to: 127.0.0.1
 -
     hosts: localhost
     vars_files:
@@ -215,9 +215,9 @@
                     network_interfaces:
                         -
                             access_configs:
-                            -
-                                name: External NAT
-                                type: ONE_TO_ONE_NAT
+                                -
+                                    name: External NAT
+                                    type: ONE_TO_ONE_NAT
                     tags:
                         items: [ "allow-http", "allow-http-alt", "allow-https" ]
             register: golden_template
