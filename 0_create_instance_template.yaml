@@ -126,11 +126,10 @@
             chdir: "{{ project_name }}"
     -
         name: Modify the DB server in the frontend config
-        lineinfile:
+        replace:
             path: "{{ project_name }}/config.json"
-            backrefs: true
-            regexp: '^(\s*"db_server":\s*)"[^"]*"(.*)'
-            line: '\1"{{ db_server_instance_name }}"\2'
+            regexp: '(?<="db_server":)\s*".*?"'
+            replace: ' "{{ db_server_instance_name }}"'
     -
         name: Installing npm packages
         command: "/usr/bin/npm install"

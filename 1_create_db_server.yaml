@@ -62,11 +62,9 @@
             systemctl start mariadb
     -
         name: Clone the project source
-        become: yes
         shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
     -
         name: Update the project source
-        become: yes
         command: "/bin/git pull"
         args:
             chdir: "{{ project_name }}"
@@ -101,26 +99,20 @@
         register: db_subnet_facts
     -
         name: Modify the subnet in DB creation script
-        become: yes
         tags: test
         vars:
             cidr: "{{ db_subnet_facts['items'][0].ipCidrRange }}"
             local_subnet: "{{ cidr | ipaddr('network') }}/{{ cidr | ipaddr('netmask') }}"
-        lineinfile:
+        replace:
             path: "{{ project_name }}/sql/00_create.sql"
-            backrefs: true
-            regexp: "^(.*)'127.0.0.0/8'(.*)"
-            line: "\\1'{{ local_subnet }}'\\2"
+            regexp: "(?<=@')[1-9][^']*"
+            replace: "{{ local_subnet }}"
     -
         name: Create the database structure
         become: yes
-        shell: "mysql < 00_create.sql"
-        args:
-            chdir: "{{ project_name }}/sql"
-    -
-        name: Add example data
-        become: yes
-        shell: "mysql < 01_add_data.sql"
+        shell: |
+            mysql < 00_create.sql
+            mysql < 01_add_data.sql
         args:
             chdir: "{{ project_name }}/sql"
 

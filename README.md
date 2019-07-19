@@ -20,6 +20,22 @@ which has to be actualised with valid values before use.
 For the autoscaling feature the webservers must be fully cloneable, so they will be a Managed Instance Pool, and for
 that we need an Instance Template.
 
+That Instance Template requires a Disk Image, which we create by provisioning a temporary ('golden') instance,
+installing and configuring it as needed, and after creating the image and the template, we discard it automatically.
+
+Strictly speaking, the Instance Template isn't part of our environment to install, on the per-environment basis we'll
+only refer to it.
+
+### Per-environment resources
+
+An Instance Group Manager that (surprise...) manages a Managed Instance Group, whose members will be the
+webservers, all of them created from an Instance Template (like the one we created above).
+
+Additionally, there is one DB server, which is just a plain Instance we create right here (though we could've created
+an Instance Template for that as well).
+
+And finally, there the load balancing GCP resources: Backend Service, Target HTTP Proxy, URL Map, Forwarding Rule.
+
 
 ## Credentials
 
@@ -83,14 +99,6 @@ It's well documented, but I've rarely seen it in the examples on the net.
 
 If there are multiple instances created, it's enough to refresh the inventory only once, when leaving this
 locally ran play.
-
-
-### `lineinfile`
-
-It would've been more readable if the regex flavour of this module supported lookaround constructs and non-greedy
-quantifiers like `(?<="db_server":\s*)".*?"`.
-
-Well, on a second thought, it's easier to read for regex-fans, but probably not for everyone...
 
 
 ### Waiting for an instance to go down
@@ -168,6 +176,21 @@ Of all these, maybe the 'read the docs' was the only positive thing, the rest wa
 shadows for almost a day.
 
 So, again: for Forwarding Rules **changes take time to propagate, >= 5 minutes before it starts working**.
+
+
+## Destroying the infrastructure
+
+As the counterparts of the creator playbooks, there are destroyers as well:
+
+* `7_destroy_webservers.yaml`
+* `8_destroy_db_server.yaml`
+* `9_destroy_instance_template.yaml`
+
+They just define the same resources in reverse order, with `state: absent`.
+
+Some of these resources have mandatory attributes that otherwise are irrelevant when destroying the resouce (like
+`gcp_compute_target_http_proxy` must have a `url_map` reference anyway), in these cases these attributes must be
+present but may be empty.
 
 
 ## Misc notes
