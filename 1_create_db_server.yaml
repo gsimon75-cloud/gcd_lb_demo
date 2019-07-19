@@ -82,8 +82,6 @@
                 - name = "{{ db_server_instance_name }}"
         delegate_to: 127.0.0.1
         register: db_server_facts
-        # db_server_facts['items'][0].networkInterfaces[0].network
-        # db_server_facts['items'][0].networkInterfaces[0].subnetwork
     -
         name: This is the DB server interface
         tags: test
@@ -98,7 +96,6 @@
             service_account_file: "{{ gcp_cred_file }}"
             region: "{{ gcp_region }}"
             filters:
-                #- name = "default"
                 - selfLink = "{{ db_server_facts['items'][0].networkInterfaces[0].subnetwork }}"
         delegate_to: 127.0.0.1
         register: db_subnet_facts

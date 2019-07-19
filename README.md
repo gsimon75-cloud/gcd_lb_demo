@@ -3,7 +3,7 @@
 ## Overview
 
 This project aims to demonstrate how to set up an infrastructure for a small web application that has multiple http
-frontends (with load-balancing and auto-scaling), and a single database backend.
+webservers (with load-balancing and auto-scaling), and a single database backend.
 
 Although it is not that difficult to build this via the GUI, the secondary goal is to accomplish all this in an
 automated manner, so this whole infrastructure shall be replicable easily and without human interaction.
@@ -17,7 +17,7 @@ single Project, so it will be completely separate from any other activities of o
 The files `provisioner.pem`, `provisioner.openssh.pub`, `service_account.json` contain credential information,
 which has to be actualised with valid values before use.
 
-For the autoscaling feature the frontends must be fully cloneable, so they will be a Managed Instance Pool, and for
+For the autoscaling feature the webservers must be fully cloneable, so they will be a Managed Instance Pool, and for
 that we need an Instance Template.
 
 
@@ -34,7 +34,7 @@ just like as you would add to a `.ssh/authorized_keys` file. The username will b
 `user@...` part (the `...somewhere` part is not relevant).
 
 
-## Creating the instance template of the frontend
+## Creating the instance template of the webserver
 
 This step has to be performed only once, and later the future webservers can just instantiate it.
 
@@ -46,12 +46,138 @@ instance parameters and refer to this image when cloning the new disks on instan
 
 (Or, with the log-recording helper script: `./run.sh 0_create_instance_template.yaml -v`)
 
-## To Be Continued ...
+
+There are some non-trivial things here in this step:
 
 
-## Notes
+### Firewall rules
+
+The module `gce_net` seems a bit unrelated to the `gcp_compute_*` modules, probably because it is based on `libcloud`.
+
+Its attribute names are different (`project_id` and `credentials_file` instead of `project` and `service_account_file`),
+and it explicitely requires a `service_account_email`, although it is already present in that .json file.
+
+Therefore some templating trickery was needed to extract it and store it in a variable (`service_account_email`).
+
+There is a TODO here: It works now, but if I eliminate that `service_account_content` variable by using a directly piped
+`lookup(...) | json_query(...)` construct, it results an empty string. I'd like to find out why...
+
+
+### Waiting for a newly created instance to become available
+
+Specifying `status: RUNNING` will only ensure that the instance exists and is started, but not that its `sshd` is also
+running and accepting connections.
+
+That must be explicitely checked by that nice subsequent `wait_for` task, otherwise the next steps (like fact gathering)
+would fail.
+
+NOTE: That `wait_for` now uses the 0th public IP of the 0th interface, which is the intended address in this setup.
+In another future setup it may be different (for example, when provisioning from within the local network), in that
+case it should be modified accordingly.
+
+
+### Refreshing the inventory
+
+A newly created instance doesn't appear automatically, so we must explicitely trigger that refresh.
+It's well documented, but I've rarely seen it in the examples on the net.
+
+If there are multiple instances created, it's enough to refresh the inventory only once, when leaving this
+locally ran play.
+
+
+### `lineinfile`
+
+It would've been more readable if the regex flavour of this module supported lookaround constructs and non-greedy
+quantifiers like `(?<="db_server":\s*)".*?"`.
+
+Well, on a second thought, it's easier to read for regex-fans, but probably not for everyone...
+
+
+### Waiting for an instance to go down
+
+Checking SSH availability isn't enough here, because then the instance is still STOPPING, so it holds a reference on
+its boot disk, so we can't use that for creating an image.
+
+We must explicitely wait for the TERMINATED status. It's nice to see that there is an easy, straightforward, documented
+and efficient way to do this.
+
+
+### The transitions between local, remote and again local plays
+
+Each play must be separately executable, so they can't rely on information collected/produced by a 'prior' one.
+
+This is why I'm rather collecting `gcp_compute_disk_facts` than just export them at the creation phase.
+
+
+## Creating the DB server
+
+No real surprise here, it's much simpler than the instance template above, see `1_create_db_server.yaml`.
+
+
+## Creating the webservers and the load balancing
+
+This was a complex one :D.
+
+First of all, the load balancing concepts of GCP are by themselves complex enough (global vs. regional, external vs.
+internal, premium vs. standard), and not all features are available in all scenarios.
+
+Second, the current state of the `gcp_compute_*` modules doesn't cover everything, there are open issues.
+
+We want a Managed Instance Group (indentical instances 'cloned' from an instance template), that needs an Instance
+Group Manager, but that's still straightforward enough. Note though, that it (naturally) belongs to a *zone*.
+
+The HTTP Health Check is also quite simple, it just contains parameters and doesn't refer to anything else.
+
+The next level is the Backend Service.
+
+
+### Backend Service
+
+According to the GCP docs, a Backend Service can be either global or regional, but `gcp_compute_backend_service`
+supports only the global one, see this [issue](https://github.com/ansible/ansible/issues/52319).
+
+Not a problem here, because GCP supports HTTP load balancing (with session affinity controlled by cookie instead of
+the plain src+dst+proto hash) only on global Backend Services, but I've ran a few circles until I figured it out that
+I'll need a global one anyway.
+
+
+### Target HTTP Proxy and URL Map
+
+A Target HTTP Proxy contains *nothing* but a reference to a URL Map, so I don't really see the point in them
+being separate entities. It seems a clear 1-1 relationship to me, at least as of now.
+
+And the important information: Target HTTP Proxies are inherently global, they don't belong to any region.
+
+
+### Forwarding Rule
+
+And here we are :D.
+
+Global vs. regional again: their targets must match their globalness. And since Target HTTP Proxies are global,
+we need a **Global** Forwarding Rule here. And that implies the PREMIUM tier.
+
+Just note that we need `gcp_compute_global_forwarding_rule` instead of `gcp_compute_forwarding_rule` here.
+
+And another consequence of the concept: As this is a **global** resource, it takes some time while our changes propagate
+worldwide, so our freshly created Forwarding Rule **won't just work immediately, but only after some 5 minutes**.
+
+First when I saw that it was created but it isn't working, I thought I mis-configured something, so I just destroyed the
+infrastructure, read the docs, started to investigate and tried some alternatives.
+
+Of all these, maybe the 'read the docs' was the only positive thing, the rest was just wasting the time on chasing
+shadows for almost a day.
+
+So, again: for Forwarding Rules **changes take time to propagate, >= 5 minutes before it starts working**.
+
+
+## Misc notes
 
 ### Why not Terraform
+
+At first I tried to create the infrastructure by Terraform and do only the sw provisioning by Ansible.
+
+Then I hit some problems where the cure would've been worse than the disease, so to speak, and the reason was the
+difference between the nature of the problem and the nature of Terraform.
 
 Terraform aims to achieve a 'desired' state of interdependent resources and it's quite an adequate tool for it.  But its
 main concept is to be **declarative**, meaning that in the configuration we describe that single desired *state* of the
@@ -85,3 +211,4 @@ designed to describe and support infrastructures that
 It can be hacked to do that, but that'll be much more counterintuitive to read, even than a shell script, and it would take
 more effort to *force* Terraform to do what we want than what it takes to do the actual job itself.
 
+It may be a good tool, but it's not the best one for this job.
