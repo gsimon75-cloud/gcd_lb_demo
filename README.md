@@ -169,14 +169,14 @@ Just note that we need `gcp_compute_global_forwarding_rule` instead of `gcp_comp
 And another consequence of the concept: As this is a **global** resource, it takes some time while our changes propagate
 worldwide, so our freshly created Forwarding Rule **won't just work immediately, but only after some 5 minutes**.
 
-First when I saw that it was created but it isn't working, I thought I mis-configured something, so I just destroyed the
-infrastructure, read the docs, started to investigate and tried some alternatives.
-
-Of all these, maybe the 'read the docs' was the only positive thing, the rest was just wasting the time on chasing
-shadows for almost a day.
+First when I saw that it was created but it wasn't working, I thought I mis-configured something, so I just destroyed the
+infrastructure, read the docs, started to investigate and tried some alternatives, and again, and then again...
+Of all these, maybe the 'read the docs' was the only positive thing, the rest was just wasting almost a day on chasing
+shadows.
 
 So, again: for Forwarding Rules **changes take time to propagate, >= 5 minutes before it starts working**.
 
+The other thing to note is that the `target` attribute of these modules may refer not only to Target Pools, but to Target Proxies as well.
 
 ## Destroying the infrastructure
 
@@ -194,6 +194,18 @@ present but may be empty.
 
 
 ## Misc notes
+
+### GCD terminology about Load Balancers
+
+On the default web interface of [Load Balancing](https://console.cloud.google.com/net-services/loadbalancing)
+Google tries to keep the complexities under the hood as much as possible, which is good from a user perspective,
+but we need the Advanced menu instead.
+
+There we see every entity we discussed above, except for the URL map. On the other hand, on the basic view we
+see things that are called Load Balancers, while there are no such entities on the API. Well... they seem to mean
+the same thing: if we create an URL map, it'll appear as the representative of this whole chain of entities that
+are in fact the 'Load Balancer'.
+
 
 ### Why not Terraform
 
