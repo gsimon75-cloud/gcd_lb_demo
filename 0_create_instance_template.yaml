@@ -118,41 +118,41 @@
                     - "make"
         -
             name: Clone the project source
-            shell: "[ -d {{ project_name }} ] || /bin/git clone {{ project_repo }} {{ project_name }}"
+            shell: "[ -d {{ app_name }} ] || /bin/git clone {{ app_repo }} {{ app_name }}"
         -
             name: Update the project source
             command: "/bin/git pull"
             args:
-                chdir: "{{ project_name }}"
+                chdir: "{{ app_name }}"
         -
             name: Modify the DB server in the frontend config
             replace:
-                path: "{{ project_name }}/config.json"
+                path: "{{ app_name }}/config.json"
                 regexp: '(?<="db_server":)\s*".*?"'
                 replace: ' "{{ db_server_instance_name }}"'
         -
-            name: Installing npm packages
+            name: Install the npm packages
             command: "/usr/bin/npm install"
             args:
-                chdir: "{{ project_name }}"
+                chdir: "{{ app_name }}"
         -
             name: Build the Frontend server
             command: "/usr/bin/npm run builddev"
             args:
-                chdir: "{{ project_name }}"
+                chdir: "{{ app_name }}"
         -
             name: Generate service descriptor file
             become: yes
             template:
                 src: "templates/service_file.j2"
-                dest: "/etc/systemd/system/{{ project_name }}.service"
+                dest: "/etc/systemd/system/{{ app_name }}.service"
                 owner: "root"
                 group: "root"
                 mode: '0644'
         -
             name: Enable the Frontend as a service
             become: yes
-            command: "/usr/bin/systemctl enable {{ project_name }}"
+            command: "/usr/bin/systemctl enable {{ app_name }}"
         -
             name: Shut down the instance
             become: yes
