@@ -99,18 +99,18 @@
     tasks:
         -
             name: Download NodeSource repo registrator
-            become: yes
+            become: true
             get_url:
                 url: "https://rpm.nodesource.com/setup_10.x"
                 dest: "~/NodeSource.reg.sh"
                 mode: '0755'
         -
             name: Add NodeSource repository
-            become: yes
+            become: true
             shell: "~/NodeSource.reg.sh"
         -
             name: Install ExpressJS dependencies
-            become: yes
+            become: true
             yum:
                 name:
                     - "nodejs"
@@ -142,7 +142,7 @@
                 chdir: "{{ app_name }}"
         -
             name: Generate service descriptor file
-            become: yes
+            become: true
             template:
                 src: "templates/service_file.j2"
                 dest: "/etc/systemd/system/{{ app_name }}.service"
@@ -151,11 +151,11 @@
                 mode: '0644'
         -
             name: Enable the Frontend as a service
-            become: yes
+            become: true
             command: "/usr/bin/systemctl enable {{ app_name }}"
         -
             name: Shut down the instance
-            become: yes
+            become: true
             shell: "sleep 2 && /sbin/shutdown -c && /sbin/shutdown -h now"
             async: 1
             poll: 0

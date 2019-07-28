@@ -49,14 +49,14 @@
     tasks:
         -
             name: Install MariaDB
-            become: yes
+            become: true
             yum:
                 name:
                     - "mariadb"
                     - "mariadb-server"
         -
             name: Start MariaDB
-            become: yes
+            become: true
             shell: |
                 systemctl enable mariadb
                 systemctl start mariadb
@@ -109,7 +109,7 @@
                 replace: "{{ local_subnet }}"
         -
             name: Create the database structure
-            become: yes
+            become: true
             shell: |
                 mysql < 00_create.sql
                 mysql < 01_add_data.sql
